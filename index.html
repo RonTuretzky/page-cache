@@ -826,7 +826,32 @@ exports.init = init;
             const templateConfig = {
                 rememberExpirationKey: "staticrypt_expiration",
                 rememberPassphraseKey: "staticrypt_passphrase",
-                replaceHtmlCallback: null,
+                replaceHtmlCallback: function (html) {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    const scripts = Array.from(parsed.querySelectorAll('script'));
+    const pendingScripts = scripts.map(function (script) {
+        const placeholder = parsed.createComment('script');
+        script.replaceWith(placeholder);
+        return { script: script, placeholder: placeholder };
+    });
+    const root = document.importNode(parsed.documentElement, true);
+    const comments = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT);
+    const placeholders = [];
+    while (comments.nextNode()) {
+        if (comments.currentNode.nodeValue === 'script') placeholders.push(comments.currentNode);
+    }
+    document.replaceChild(root, document.documentElement);
+    pendingScripts.forEach(function (entry, index) {
+        const script = document.createElement('script');
+        for (const attribute of entry.script.attributes) script.setAttribute(attribute.name, attribute.value);
+        script.textContent = entry.script.textContent;
+        script.addEventListener('error', function () {
+            const status = document.getElementById('wallet-status');
+            if (status) status.textContent = 'The app could not start. Refresh this page and try again.';
+        });
+        placeholders[index].replaceWith(script);
+    });
+},
                 clearLocalStorageCallback: null,
             };
 
